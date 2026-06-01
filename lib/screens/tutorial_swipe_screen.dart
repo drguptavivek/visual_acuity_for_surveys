@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class _TutorialStep {
@@ -33,7 +32,7 @@ class TutorialSwipeScreen extends StatelessWidget {
             onPressed: () {
               Navigator.pop(context);
             },
-            child: Text('Skip'),
+            child: const Text('Skip'),
           ),
         ],
       ),

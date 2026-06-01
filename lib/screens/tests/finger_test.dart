@@ -10,11 +10,11 @@ import '../../Logger/logger.dart';
 import '../../utils/helpers.dart';
 
 class FingerTest extends StatefulWidget {
-  String patientInfo;
-  String visionType;
+  final String patientInfo;
+  final String visionType;
   final void Function(int correct, int wrong) onComplete;
 
-  FingerTest({
+  const FingerTest({
     super.key,
     required this.patientInfo,
     required this.visionType,
@@ -47,7 +47,7 @@ class _FingerTestState extends State<FingerTest> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    setBrightnessTo90();
+    setBrightnessTo80();
     svgFiles = [
       'assets/images/tests/FC_1.svg',
       'assets/images/tests/FC_2.svg',

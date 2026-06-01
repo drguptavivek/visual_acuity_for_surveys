@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:v_a_rpc/utils/helpers.dart';
 
 class DistanceScreenWrapper extends StatelessWidget {
   const DistanceScreenWrapper({super.key});
@@ -8,15 +9,24 @@ class DistanceScreenWrapper extends StatelessWidget {
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final double minDistance = args['distance']?.toDouble() ?? 3.0;
+    final String visionType = args['visionType'] ?? '';
 
-    return DistanceScreen(minimumDistanceMeters: minDistance);
+    return DistanceScreen(
+      minimumDistanceMeters: minDistance,
+      visionType: visionType,
+    );
   }
 }
 
 class DistanceScreen extends StatelessWidget {
   final double minimumDistanceMeters;
+  final String visionType;
 
-  const DistanceScreen({super.key, required this.minimumDistanceMeters});
+  const DistanceScreen({
+    super.key,
+    required this.minimumDistanceMeters,
+    this.visionType = '',
+  });
 
   String _getImageForDistance(double distance) {
     if (distance == 0.4) {
@@ -33,6 +43,7 @@ class DistanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imagePath = _getImageForDistance(minimumDistanceMeters);
+    final nearInstruction = nearVisionInstructionForVisionType(visionType);
 
     return Scaffold(
       body: Padding(
@@ -69,6 +80,21 @@ class DistanceScreen extends StatelessWidget {
               ),
               textAlign: TextAlign.justify,
             ),
+            if (nearInstruction != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF4FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFB8C7EA)),
+                ),
+                child: Text(
+                  nearInstruction,
+                  style: const TextStyle(fontSize: 16, color: Colors.black),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Image.asset(imagePath, fit: BoxFit.contain),
           ],

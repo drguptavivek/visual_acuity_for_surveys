@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
 import '../managers/test_history.dart'; // If using SVG eye icon
+import '../utils/helpers.dart';
 
 class SummaryScreenWrapper extends StatelessWidget {
   const SummaryScreenWrapper({super.key});
@@ -15,6 +16,9 @@ class SummaryScreenWrapper extends StatelessWidget {
       finalResult: args['finalResult'],
       patientInfo: args['patientInfo'],
       visionType: args['visionType'],
+      durationSeconds: args['durationSeconds'] as int?,
+      ambientLuxByLevel: args['ambientLuxByLevel'] as String?,
+      screenBrightnessByLevel: args['screenBrightnessByLevel'] as String?,
     );
   }
 }
@@ -23,12 +27,18 @@ class SummaryScreen extends StatefulWidget {
   final String finalResult;
   final String patientInfo;
   final String visionType;
+  final int? durationSeconds;
+  final String? ambientLuxByLevel;
+  final String? screenBrightnessByLevel;
 
   const SummaryScreen({
     super.key,
     required this.finalResult,
     required this.patientInfo,
     required this.visionType,
+    this.durationSeconds,
+    this.ambientLuxByLevel,
+    this.screenBrightnessByLevel,
   });
 
   @override
@@ -49,10 +59,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
     _saved = true;
 
     await TestHistoryManager.saveTest(
-      dateTime: DateTime.now().toIso8601String(),
+      dateTime: formatLocalDateTimeSeconds(DateTime.now()),
       patientInfo: widget.patientInfo,
       visionType: widget.visionType,
       result: widget.finalResult,
+      durationSeconds: widget.durationSeconds,
+      ambientLuxByLevel: widget.ambientLuxByLevel,
+      screenBrightnessByLevel: widget.screenBrightnessByLevel,
     );
   }
 
@@ -73,6 +86,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
         return "No light perception detected...";
       case 'N6':
         return "You have excellent near vision...";
+      case 'N8-failed':
+        return "Your near vision is below N8 on this screening test...";
       case 'N6-failed':
         return "Your near vision is below normal levels...";
       default:

@@ -76,6 +76,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     final luxValue = int.tryParse(luxText);
 
     if (luxValue == null || luxValue <= 0) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a valid positive max lux value.'),
@@ -92,6 +93,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     await prefs.setDouble(_keyPxPerCm, pxPerCm);
     await prefs.setInt(_keyMaxLux, luxValue);
 
+    if (!mounted) return;
     setState(() {
       this.pxPerCm = pxPerCm;
     });
@@ -112,7 +114,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('Calibration saved!')));
+    ).showSnackBar(const SnackBar(content: Text('Calibration saved!')));
   }
 
   @override
@@ -143,7 +145,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                   Container(
                     width: _boxPx,
                     height: _boxPx,
-                    color: Colors.blue.withOpacity(0.4),
+                    color: Colors.blue.withValues(alpha: 0.4),
                   ),
 
                   const SizedBox(height: 16),
@@ -194,6 +196,19 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                     'Tip: align any one side to $_targetCm cm using a physical ruler. '
                     'Do not change the on-screen cm target; instead adjust the px slider.',
                     textAlign: TextAlign.center,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/nearBrightnessCalibration',
+                      );
+                    },
+                    icon: const Icon(Icons.brightness_6),
+                    label: const Text('Near Brightness Calibration'),
                   ),
 
                   const SizedBox(height: 24),

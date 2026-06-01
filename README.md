@@ -31,7 +31,7 @@ A cross-platform mobile application for recording visual acuity in population su
 
 ## Overview
 
-The application records visual acuity for six distance vision modalities and one near vision modality per patient. Completed modalities are tracked per patient ID and marked with a tick in the test selection screen, allowing a full survey session to be conducted without duplication.
+The application records visual acuity for six distance vision modalities and two near vision modalities per patient. Completed modalities are tracked per patient ID and marked with a tick in the test selection screen, allowing a full survey session to be conducted without duplication.
 
 **Supported vision types:**
 
@@ -43,7 +43,8 @@ The application records visual acuity for six distance vision modalities and one
 | Left eye — uncorrected | UVA |
 | Left eye — corrected (with glasses) | CVA |
 | Left eye — pinhole | PinVA |
-| Near vision (both eyes) | N6 |
+| Presenting near visual acuity | N6 |
+| Unaided near visual acuity | N6 |
 
 ---
 
@@ -69,7 +70,7 @@ Starts at 6/60 (level 1, 3 m). The algorithm traverses up to nine levels dependi
 - Torch is disabled immediately after response
 
 ### Near Vision Track
-Single level (N6) assessed at 0.4 m using the tumbling E sub-test. Result is either N6 (pass) or N6-failed.
+Near vision is assessed at 0.4 m using the tumbling E sub-test. By default, the near track starts at N8 and proceeds to N6 if N8 is passed. If N8 is disabled in Settings, the near track starts directly at N6. Results are recorded as N6, N6-failed, or N8-failed depending on the enabled levels and patient response.
 
 ---
 
@@ -86,6 +87,7 @@ Single level (N6) assessed at 0.4 m using the tumbling E sub-test. Result is eit
 | 6 | FC | 0.3 m | — | Finger Counting |
 | 7 | PL− | 0.1 m | — | Perception of Light |
 | 8 | PL+ | 0.1 m | — | Perception of Light |
+| 9 | N8 | 0.4 m | 0.15 | Tumbling E |
 
 **Distance vision level progression:**
 

@@ -1,7 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _loadingCalibration = true;
+  bool _hasBoxCalibration = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalibrationStatus();
+  }
+
+  Future<void> _loadCalibrationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _hasBoxCalibration = prefs.getDouble('pxPerCm') != null;
+      _loadingCalibration = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -20,17 +45,28 @@ class HomeScreen extends StatelessWidget {
                   fit: BoxFit.cover,
                 ),
                 const SizedBox(height: 20),
+                if (!_loadingCalibration && !_hasBoxCalibration) ...[
+                  _CalibrationWarningCard(
+                    onCalibrate: () async {
+                      await Navigator.pushNamed(context, '/calibrate');
+                      await _loadCalibrationStatus();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: SizedBox(
                     width: double.infinity,
                     height: 60,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pushNamed(
-                        context,
-                        '/testHome',
-                        arguments: {'patientInfo': null},
-                      ),
+                      onPressed: _hasBoxCalibration
+                          ? () => Navigator.pushNamed(
+                              context,
+                              '/testHome',
+                              arguments: {'patientInfo': null},
+                            )
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
                             Colors.indigo, // Button background color
@@ -61,10 +97,12 @@ class HomeScreen extends StatelessWidget {
                   label: 'Tutorial',
                   route: '/tutorial',
                 ),
-                _buildFullWidthButton(
-                  context,
+                _buildFullWidthButtonWithAction(
                   label: 'Calibrate Screen',
-                  route: '/calibrate',
+                  onPressed: () async {
+                    await Navigator.pushNamed(context, '/calibrate');
+                    await _loadCalibrationStatus();
+                  },
                 ),
                 _buildFullWidthButton(
                   context,
@@ -98,6 +136,55 @@ class HomeScreen extends StatelessWidget {
           onPressed: () => Navigator.pushNamed(context, route),
           child: Text(label),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFullWidthButtonWithAction({
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(onPressed: onPressed, child: Text(label)),
+      ),
+    );
+  }
+}
+
+class _CalibrationWarningCard extends StatelessWidget {
+  final VoidCallback onCalibrate;
+
+  const _CalibrationWarningCard({required this.onCalibrate});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        border: Border.all(color: Colors.amber.shade700),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Screen size is not calibrated. Optotype size may be inaccurate.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onCalibrate, child: const Text('Calibrate')),
+        ],
       ),
     );
   }

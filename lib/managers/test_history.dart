@@ -6,7 +6,7 @@ import '../Logger/logger.dart';
 
 class TestHistoryManager {
   static Future<void> clearHistory() async {
-    final filePath = await _getFilePath();
+    final filePath = await getFilePath();
     final file = File(filePath);
 
     if (await file.exists()) {
@@ -14,7 +14,7 @@ class TestHistoryManager {
     }
   }
 
-  static Future<String> _getFilePath() async {
+  static Future<String> getFilePath() async {
     final directory = await getApplicationDocumentsDirectory();
     final path = '${directory.path}/test_history.xlsx';
     return path;
@@ -25,8 +25,11 @@ class TestHistoryManager {
     required String patientInfo,
     required String visionType,
     required String result,
+    int? durationSeconds,
+    String? ambientLuxByLevel,
+    String? screenBrightnessByLevel,
   }) async {
-    final filePath = await _getFilePath();
+    final filePath = await getFilePath();
     final file = File(filePath);
 
     Excel excel;
@@ -44,6 +47,9 @@ class TestHistoryManager {
         TextCellValue('patientInfo'),
         TextCellValue('visionType'),
         TextCellValue('Result'),
+        TextCellValue('DurationSeconds'),
+        TextCellValue('AmbientLuxByLevel'),
+        TextCellValue('ScreenBrightnessByLevel'),
       ]);
     }
 
@@ -52,6 +58,9 @@ class TestHistoryManager {
       TextCellValue(patientInfo),
       TextCellValue(visionType),
       TextCellValue(result),
+      TextCellValue(durationSeconds?.toString() ?? ''),
+      TextCellValue(ambientLuxByLevel ?? ''),
+      TextCellValue(screenBrightnessByLevel ?? ''),
     ]);
 
     final encodedBytes = excel.encode();
@@ -61,7 +70,7 @@ class TestHistoryManager {
   }
 
   static Future<List<List<String>>> readHistory() async {
-    final filePath = await _getFilePath();
+    final filePath = await getFilePath();
     final file = File(filePath);
 
     if (!await file.exists()) return [];
@@ -76,7 +85,7 @@ class TestHistoryManager {
   }
 
   static Future<List<String>> readLatestHistoryRow() async {
-    final filePath = await _getFilePath();
+    final filePath = await getFilePath();
     final file = File(filePath);
 
     if (!await file.exists()) {
@@ -112,7 +121,7 @@ class TestHistoryManager {
   static Future<List<List<String>>> readHistoryByPatient(
     String patientId,
   ) async {
-    final filePath = await _getFilePath();
+    final filePath = await getFilePath();
     final file = File(filePath);
 
     if (!await file.exists()) return [];

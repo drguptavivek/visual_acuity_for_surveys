@@ -7,14 +7,86 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../Logger/logger.dart';
 
+enum DistanceFlowMode {
+  standard('standard'),
+  alternate612('alternate612');
+
+  final String storageValue;
+
+  const DistanceFlowMode(this.storageValue);
+
+  static DistanceFlowMode fromStorageValue(String? value) {
+    return DistanceFlowMode.values.firstWhere(
+      (mode) => mode.storageValue == value,
+      orElse: () => DistanceFlowMode.standard,
+    );
+  }
+}
+
+const String nearScreenBrightnessPercentKey = 'nearScreenBrightnessPercent';
+const int defaultNearScreenBrightnessPercent = 50;
+const int minNearScreenBrightnessPercent = 30;
+const int maxNearScreenBrightnessPercent = 70;
+const int nearScreenBrightnessStepPercent = 2;
+
+class DistanceFlowStep {
+  final int? nextLevel;
+  final String? finalResult;
+  final bool confirming612After619;
+
+  const DistanceFlowStep({
+    this.nextLevel,
+    this.finalResult,
+    this.confirming612After619 = false,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    return other is DistanceFlowStep &&
+        other.nextLevel == nextLevel &&
+        other.finalResult == finalResult &&
+        other.confirming612After619 == confirming612After619;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(nextLevel, finalResult, confirming612After619);
+}
+
+DistanceFlowStep? nextDistanceFlowStep({
+  required DistanceFlowMode mode,
+  required int level,
+  required bool isPass,
+  required bool confirming612After619,
+}) {
+  if (mode != DistanceFlowMode.alternate612) return null;
+
+  if (level == 1 && isPass) {
+    return const DistanceFlowStep(nextLevel: 3);
+  }
+
+  if (level == 3 && !isPass) {
+    if (confirming612After619) {
+      return const DistanceFlowStep(finalResult: '6/19');
+    }
+    return const DistanceFlowStep(nextLevel: 2);
+  }
+
+  if (level == 2 && isPass) {
+    return const DistanceFlowStep(nextLevel: 3, confirming612After619: true);
+  }
+
+  return null;
+}
+
 Future<bool> checkAmbientLight(
-  maxluxvalue,
-  lightWarningShown,
-  dynamic context,
+  int maxluxvalue,
+  bool lightWarningShown,
+  BuildContext context,
 ) async {
   try {
-    final AmbientLight ambientLight = AmbientLight(frontCamera: true);
-    double? lux = await ambientLight.currentAmbientLight();
+    double? lux = await readAmbientLux();
+    if (!context.mounted) return false;
     // logger.d(
     //   "lux : $lux | maxluxvalue : $maxluxvalue | lightWarningShown : $lightWarningShown",
     // );
@@ -46,12 +118,117 @@ Future<bool> checkAmbientLight(
   return false;
 }
 
-Future<void> setBrightnessTo90() async {
+bool isNearVisionType(String visionType) {
+  return visionType == 'Near Vision' ||
+      visionType == 'Presenting Near VA' ||
+      visionType == 'Near Corrected Visual Acuity (with Near Glasses)' ||
+      visionType == 'Unaided Near VA';
+}
+
+String? nearVisionInstructionForVisionType(String visionType) {
+  if (visionType == 'Presenting Near VA') {
+    return 'Presenting Near VA: test with the participant using their usual near correction, if they normally use one. Keep the phone at 40 cm, perpendicular to the visual axis, and avoid screen glare.';
+  }
+
+  if (visionType == 'Unaided Near VA') {
+    return 'Unaided Near VA: test without spectacles or any near correction. Keep the phone at 40 cm, perpendicular to the visual axis, and avoid screen glare.';
+  }
+
+  if (visionType == 'Near Corrected Visual Acuity (with Near Glasses)') {
+    return 'Near Corrected Visual Acuity: test with the participant using their near glasses. Keep the phone at 40 cm, perpendicular to the visual axis, and avoid screen glare.';
+  }
+
+  return null;
+}
+
+int startNearLevel({required Set<int> disabledLevels}) {
+  return disabledLevels.contains(9) ? 5 : 9;
+}
+
+double defaultScreenBrightnessForVisionType(String visionType) {
+  return isNearVisionType(visionType) ? 0.5 : 0.8;
+}
+
+int normalizeNearScreenBrightnessPercent(int value) {
+  return value.clamp(
+    minNearScreenBrightnessPercent,
+    maxNearScreenBrightnessPercent,
+  );
+}
+
+double brightnessPercentToFraction(int percent) {
+  return normalizeNearScreenBrightnessPercent(percent) / 100;
+}
+
+Future<int> calibratedNearScreenBrightnessPercent() async {
+  final prefs = await SharedPreferences.getInstance();
+  return normalizeNearScreenBrightnessPercent(
+    prefs.getInt(nearScreenBrightnessPercentKey) ??
+        defaultNearScreenBrightnessPercent,
+  );
+}
+
+Future<double> screenBrightnessForVisionType(String visionType) async {
+  if (!isNearVisionType(visionType)) return 0.8;
+  final nearPercent = await calibratedNearScreenBrightnessPercent();
+  return brightnessPercentToFraction(nearPercent);
+}
+
+Future<double?> readAmbientLux() async {
   try {
-    await ScreenBrightness().setApplicationScreenBrightness(0.9); // 90%
+    final AmbientLight ambientLight = AmbientLight(frontCamera: true);
+    return ambientLight.currentAmbientLight();
+  } catch (e) {
+    logger.d('Failed to get ambient light: $e');
+    return null;
+  }
+}
+
+String ambientLuxByLevelToExport(Map<String, double> ambientLuxByLevel) {
+  return ambientLuxByLevel.entries
+      .map((entry) => '${entry.key}=${entry.value.round()}')
+      .join('; ');
+}
+
+String screenBrightnessByLevelToExport(
+  Map<String, double> screenBrightnessByLevel,
+) {
+  return screenBrightnessByLevel.entries
+      .map((entry) => '${entry.key}=${(entry.value * 100).round()}')
+      .join('; ');
+}
+
+int elapsedSecondsBetween(DateTime startedAt, DateTime endedAt) {
+  final elapsed = endedAt.difference(startedAt).inSeconds;
+  return elapsed < 0 ? 0 : elapsed;
+}
+
+String formatLocalDateTimeSeconds(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  final year = local.year.toString().padLeft(4, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  final second = local.second.toString().padLeft(2, '0');
+
+  return '$year-$month-$day $hour:$minute:$second';
+}
+
+Future<void> setApplicationBrightness(double brightness) async {
+  try {
+    await ScreenBrightness().setApplicationScreenBrightness(brightness);
   } catch (e) {
     logger.d('Failed to set brightness: $e');
   }
+}
+
+Future<void> setBrightnessTo90() async {
+  await setApplicationBrightness(0.9);
+}
+
+Future<void> setBrightnessTo80() async {
+  await setApplicationBrightness(0.8);
 }
 
 /// Convert centimeters to logical pixels based on calibration if available.
@@ -88,12 +265,12 @@ Future<Size> getCalibratedSvgSize(
   double widthCm,
   double heightCm,
 ) async {
-  final prefs = await SharedPreferences.getInstance();
-  final pxPerCm = prefs.getDouble('pxPerCm');
-
   // Get device DPI for diagnostic logging
   final mq = MediaQuery.of(context);
   final dpr = mq.devicePixelRatio;
+
+  final prefs = await SharedPreferences.getInstance();
+  final pxPerCm = prefs.getDouble('pxPerCm');
 
   if (pxPerCm == null) {
     logger.w(

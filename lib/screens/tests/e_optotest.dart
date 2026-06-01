@@ -46,7 +46,7 @@ class _TestScreenWrapperState extends State<TestScreenWrapper> {
 
     // This still decides what distance page to show;
     // starting TEST level is now always 1 regardless of this.
-    final distance = _visionType == 'Near Vision' ? 0.4 : 3.0;
+    final distance = isNearVisionType(_visionType) ? 0.4 : 3.0;
     _hasStartedNavigation = true;
 
     // Schedule navigation to `/distance` after first frame, then show TestScreen
@@ -55,7 +55,7 @@ class _TestScreenWrapperState extends State<TestScreenWrapper> {
       await Navigator.pushNamed(
         context,
         '/distance',
-        arguments: {'distance': distance},
+        arguments: {'distance': distance, 'visionType': _visionType},
       );
 
       if (!mounted) return;
@@ -237,6 +237,14 @@ const Map<int, Level> levels = {
     nextLevelCorrection: null, // final PL+ on pass
     nextLevelWrong: 7, // back to PL- on fail (re-check)
   ),
+  9: Level(
+    levelNumber: 9,
+    name: 'N8',
+    levelSize: 0.15,
+    distance: 0.4,
+    nextLevelCorrection: 5,
+    nextLevelWrong: null,
+  ),
 };
 
 // ---------------- Test Screen ----------------
@@ -333,6 +341,11 @@ class _TestScreenState extends State<TestScreen> {
   int _totalWrong = 0;
   int _ignoredGestures = 0;
 
+  late final DateTime _testStartedAt;
+  final Map<String, double> _ambientLuxByLevel = {};
+  final Map<String, double> _screenBrightnessByLevel = {};
+  double _screenBrightness = 0.8;
+
   double _distance = 3.0;
   bool _testCompleted = false;
 
@@ -342,6 +355,8 @@ class _TestScreenState extends State<TestScreen> {
 
   SharedPreferences? _prefs;
   Set<int> _disabledLevels = {};
+  DistanceFlowMode _distanceFlowMode = DistanceFlowMode.standard;
+  bool _confirming612After619 = false;
 
   int? _getNextEnabledLevel(int? targetLevel, bool isPass) {
     int? current = targetLevel;
@@ -361,16 +376,46 @@ class _TestScreenState extends State<TestScreen> {
   @override
   void initState() {
     super.initState();
+    _testStartedAt = DateTime.now();
     _initializeDefaults(); // CHANGED: always level 1
     _initSharedPreferences(); // CHANGED: no longer overrides level/distance
-    setBrightnessTo90();
+    _applyConfiguredBrightness();
     _currentDirection = randomDirection(_currentDirection);
+    _recordScreenBrightnessForCurrentLevel();
+    _recordAmbientLuxForCurrentLevel();
     _startAmbientLightTimer();
+  }
+
+  Future<void> _applyConfiguredBrightness() async {
+    final brightness = await screenBrightnessForVisionType(widget.visionType);
+    if (!mounted) return;
+    _screenBrightness = brightness;
+    await setApplicationBrightness(brightness);
+    _recordScreenBrightnessForCurrentLevel();
+  }
+
+  void _recordScreenBrightnessForCurrentLevel() {
+    final levelName = levels[_level]?.name;
+    if (levelName == null) return;
+
+    _screenBrightnessByLevel[levelName] = _screenBrightness;
+  }
+
+  Future<void> _recordAmbientLuxForCurrentLevel() async {
+    final levelName = levels[_level]?.name;
+    if (levelName == null) return;
+
+    final lux = await readAmbientLux();
+    if (lux == null || !mounted) return;
+
+    setState(() {
+      _ambientLuxByLevel[levelName] = lux;
+    });
   }
 
   void _initializeDefaults() {
     // Always start from level 1 and 3m
-    _level = (widget.visionType == 'Near Vision') ? 5 : 1; // CHANGED
+    _level = isNearVisionType(widget.visionType) ? 9 : 1; // CHANGED
     _distance = levels[_level]?.distance ?? 3.0; // CHANGED
     _correctAtLevel = 0;
     _wrongAtLevel = 0;
@@ -413,8 +458,13 @@ class _TestScreenState extends State<TestScreen> {
       _totalWrong = prefs.getInt(_keyTotalWrong) ?? _totalWrong;
       _ignoredGestures = prefs.getInt(_keyIgnoredGestures) ?? _ignoredGestures;
       _maxLuxValue = prefs.getInt('maxLuxValue') ?? 15000;
+      _distanceFlowMode = DistanceFlowMode.fromStorageValue(
+        prefs.getString('distanceFlowMode'),
+      );
 
-      int startLevel = (widget.visionType == 'Near Vision') ? 5 : 1;
+      int startLevel = isNearVisionType(widget.visionType)
+          ? startNearLevel(disabledLevels: _disabledLevels)
+          : 1;
       int? actualStartLevel = _getNextEnabledLevel(startLevel, true);
       if (actualStartLevel != null) {
         _level = actualStartLevel;
@@ -435,6 +485,7 @@ class _TestScreenState extends State<TestScreen> {
       timer,
     ) async {
       final ok = await checkAmbientLight(_maxLuxValue, false, context);
+      await _recordAmbientLuxForCurrentLevel();
 
       if (!mounted) return;
 
@@ -589,22 +640,57 @@ class _TestScreenState extends State<TestScreen> {
     switch (_level) {
       // Distance vision
       case 1:
+        final alternateStep = nextDistanceFlowStep(
+          mode: _distanceFlowMode,
+          level: _level,
+          isPass: isPass,
+          confirming612After619: _confirming612After619,
+        );
+        if (alternateStep != null) {
+          _applyDistanceFlowStep(alternateStep);
+          break;
+        }
         if (isPass) {
-          int? next = _getNextEnabledLevel(levelConfig.nextLevelCorrection ?? 2, true);
-          if (next != null) _promoteTo(next);
-          else _showSummary('6/60');
+          int? next = _getNextEnabledLevel(
+            levelConfig.nextLevelCorrection ?? 2,
+            true,
+          );
+          if (next != null) {
+            _promoteTo(next);
+          } else {
+            _showSummary('6/60');
+          }
         } else if (isFail) {
           int? next = _getNextEnabledLevel(0, false);
-          if (next != null) _demoteToLevel0();
-          else _openVisualTestScreen();
+          if (next != null) {
+            _demoteToLevel0();
+          } else {
+            _openVisualTestScreen();
+          }
         }
         break;
 
       case 2:
+        final alternateStep = nextDistanceFlowStep(
+          mode: _distanceFlowMode,
+          level: _level,
+          isPass: isPass,
+          confirming612After619: _confirming612After619,
+        );
+        if (alternateStep != null) {
+          _applyDistanceFlowStep(alternateStep);
+          break;
+        }
         if (isPass) {
-          int? next = _getNextEnabledLevel(levelConfig.nextLevelCorrection ?? 3, true);
-          if (next != null) _promoteTo(next);
-          else _showSummary('6/19');
+          int? next = _getNextEnabledLevel(
+            levelConfig.nextLevelCorrection ?? 3,
+            true,
+          );
+          if (next != null) {
+            _promoteTo(next);
+          } else {
+            _showSummary('6/19');
+          }
         } else if (isFail) {
           logger.d('❌ Failed at level 2 — Final Acuity: 6/60');
           _showSummary('6/60');
@@ -612,10 +698,26 @@ class _TestScreenState extends State<TestScreen> {
         break;
 
       case 3:
+        final alternateStep = nextDistanceFlowStep(
+          mode: _distanceFlowMode,
+          level: _level,
+          isPass: isPass,
+          confirming612After619: _confirming612After619,
+        );
+        if (alternateStep != null) {
+          _applyDistanceFlowStep(alternateStep);
+          break;
+        }
         if (isPass) {
-          int? next = _getNextEnabledLevel(levelConfig.nextLevelCorrection ?? 4, true);
-          if (next != null) _promoteTo(next);
-          else _showSummary('6/12');
+          int? next = _getNextEnabledLevel(
+            levelConfig.nextLevelCorrection ?? 4,
+            true,
+          );
+          if (next != null) {
+            _promoteTo(next);
+          } else {
+            _showSummary('6/12');
+          }
         } else if (isFail) {
           logger.d('❌ Failed at level 3 — Final Acuity: 6/18');
           _showSummary('6/18');
@@ -644,6 +746,15 @@ class _TestScreenState extends State<TestScreen> {
         }
         break;
 
+      case 9:
+        logger.d('↪ Case: Level 9 Near Vision N8');
+        if (isPass) {
+          _setLevel(5);
+        } else if (isFail) {
+          _showSummary('N8-failed');
+        }
+        break;
+
       // 3/60 at 1m
       case 0:
         logger.d('↪ Case: Level 0 at 1m (3/60)');
@@ -663,8 +774,11 @@ class _TestScreenState extends State<TestScreen> {
           _showSummary('FC');
         } else if (isFail && levelConfig.nextLevelWrong != null) {
           int? next = _getNextEnabledLevel(levelConfig.nextLevelWrong, false);
-          if (next != null) _setLevel(next);
-          else _showSummary('FC-failed');
+          if (next != null) {
+            _setLevel(next);
+          } else {
+            _showSummary('FC-failed');
+          }
         }
         break;
 
@@ -674,8 +788,11 @@ class _TestScreenState extends State<TestScreen> {
           _showSummary('PL-');
         } else if (isFail && levelConfig.nextLevelWrong != null) {
           int? next = _getNextEnabledLevel(levelConfig.nextLevelWrong, false);
-          if (next != null) _setLevel(next);
-          else _showSummary('PL- failed');
+          if (next != null) {
+            _setLevel(next);
+          } else {
+            _showSummary('PL- failed');
+          }
         }
         break;
 
@@ -685,8 +802,11 @@ class _TestScreenState extends State<TestScreen> {
           _showSummary('PL+');
         } else if (isFail && levelConfig.nextLevelWrong != null) {
           int? next = _getNextEnabledLevel(levelConfig.nextLevelWrong, false);
-          if (next != null) _setLevel(next);
-          else _showSummary('PL+ failed');
+          if (next != null) {
+            _setLevel(next);
+          } else {
+            _showSummary('PL+ failed');
+          }
         }
         break;
 
@@ -700,6 +820,19 @@ class _TestScreenState extends State<TestScreen> {
   void _promoteTo(int nextLevel) {
     logger.d('✅ Promoted to level $nextLevel');
     _setLevel(nextLevel);
+  }
+
+  void _applyDistanceFlowStep(DistanceFlowStep step) {
+    _confirming612After619 = step.confirming612After619;
+
+    if (step.finalResult != null) {
+      _showSummary(step.finalResult!);
+      return;
+    }
+
+    if (step.nextLevel != null) {
+      _setLevel(step.nextLevel!);
+    }
   }
 
   void _demoteToLevel0() {
@@ -721,6 +854,8 @@ class _TestScreenState extends State<TestScreen> {
       _distance = overrideDistance ?? cfg?.distance ?? _distance;
       _resetLevelCounters();
     });
+    _recordScreenBrightnessForCurrentLevel();
+    _recordAmbientLuxForCurrentLevel();
   }
 
   void _resetLevelCounters() {
@@ -732,6 +867,10 @@ class _TestScreenState extends State<TestScreen> {
   void _showSummary(String finalResult) {
     _testCompleted = true;
     _persistProgress();
+    final durationSeconds = elapsedSecondsBetween(
+      _testStartedAt,
+      DateTime.now(),
+    );
 
     Navigator.pushReplacementNamed(
       context,
@@ -743,6 +882,11 @@ class _TestScreenState extends State<TestScreen> {
         'ignoredGestures': _ignoredGestures,
         'patientInfo': widget.patientInfo,
         'visionType': widget.visionType,
+        'durationSeconds': durationSeconds,
+        'ambientLuxByLevel': ambientLuxByLevelToExport(_ambientLuxByLevel),
+        'screenBrightnessByLevel': screenBrightnessByLevelToExport(
+          _screenBrightnessByLevel,
+        ),
       },
     );
   }
@@ -750,6 +894,10 @@ class _TestScreenState extends State<TestScreen> {
   void _openVisualTestScreen() {
     _testCompleted = true;
     _persistProgress();
+    final durationSeconds = elapsedSecondsBetween(
+      _testStartedAt,
+      DateTime.now(),
+    );
 
     Navigator.pushReplacement(
       context,
@@ -757,6 +905,13 @@ class _TestScreenState extends State<TestScreen> {
         builder: (context) => VisualTestScreen(
           patientInfo: widget.patientInfo,
           visionType: widget.visionType,
+          durationSecondsBeforeFallback: durationSeconds,
+          ambientLuxBeforeFallback: ambientLuxByLevelToExport(
+            _ambientLuxByLevel,
+          ),
+          screenBrightnessBeforeFallback: screenBrightnessByLevelToExport(
+            _screenBrightnessByLevel,
+          ),
         ),
       ),
     );

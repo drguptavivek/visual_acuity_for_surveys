@@ -1,7 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:v_a_rpc/managers/test_history.dart';
 
 import '../../Logger/logger.dart';
+
+const String _rightUcva =
+    'Right eye uncorrected vision / without glasses (UCVA)';
+const String _leftUcva = 'Left eye uncorrected vision / without glasses (UCVA)';
+const String _rightCva = 'Right eye corrected vision / with glasses (CVA)';
+const String _leftCva = 'Left eye corrected vision / with glasses (CVA)';
+const String _rightPva = 'Right eye presenting vision (PVA)';
+const String _leftPva = 'Left eye presenting vision (PVA)';
+const String _rightPinva = 'Right eye pinhole vision (PinVA)';
+const String _leftPinva = 'Left eye pinhole vision (PinVA)';
+const String _presentingNearVa = 'Presenting Near VA';
+const String _nearCva = 'Near Corrected Visual Acuity (with Near Glasses)';
+const String _unaidedNearVa = 'Unaided Near VA';
+
+const List<String> _allVisionOptions = [
+  _rightUcva,
+  _leftUcva,
+  _rightCva,
+  _leftCva,
+  _rightPva,
+  _leftPva,
+  _rightPinva,
+  _leftPinva,
+  _presentingNearVa,
+  _nearCva,
+  _unaidedNearVa,
+];
+
+class _DistanceVisionRow {
+  final String title;
+  final String rightValue;
+  final String leftValue;
+
+  const _DistanceVisionRow({
+    required this.title,
+    required this.rightValue,
+    required this.leftValue,
+  });
+}
 
 class PatientInputScreenWrapper extends StatelessWidget {
   const PatientInputScreenWrapper({super.key});
@@ -31,16 +71,10 @@ class PatientInputScreen extends StatefulWidget {
 class _PatientInputScreenState extends State<PatientInputScreen> {
   final TextEditingController _infoController = TextEditingController();
   String? _selectedVisionType;
-
-  final List<String> _visionOptions = [
-    'Right eye uncorrected vision / without glasses (UVA)',
-    'Right eye corrected vision / with glasses (CVA)',
-    'Right eye pinhole vision (PinVA)',
-    'Left eye uncorrected vision / without glasses (UVA)',
-    'Left eye corrected vision / with glasses (CVA)',
-    'Left eye pinhole vision (PinVA)',
-    'Near Vision',
-  ];
+  bool _isCvaEnabled = true;
+  bool _isPvaEnabled = false;
+  bool _isPinvaEnabled = true;
+  bool _isNearCvaEnabled = false;
 
   List<bool> _operationDone = [];
 
@@ -48,7 +82,7 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
     _infoController.clear();
     setState(() {
       _selectedVisionType = null;
-      _operationDone = List<bool>.filled(_visionOptions.length, false);
+      _operationDone = List<bool>.filled(_allVisionOptions.length, false);
     });
   }
 
@@ -59,6 +93,8 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
   }
 
   Future<void> _initAsync() async {
+    await _loadVisionTypeSettings();
+
     // 1. If patientInfo passed via arguments, use it.
     if (widget.patientInfo != null && widget.patientInfo!.trim().isNotEmpty) {
       final info = widget.patientInfo!.trim();
@@ -82,9 +118,20 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
       // No last patient: mark all operations as false
       if (!mounted) return;
       setState(() {
-        _operationDone = List<bool>.filled(_visionOptions.length, false);
+        _operationDone = List<bool>.filled(_allVisionOptions.length, false);
       });
     }
+  }
+
+  Future<void> _loadVisionTypeSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _isCvaEnabled = prefs.getBool('isCvaVisionTypeEnabled') ?? true;
+      _isPvaEnabled = prefs.getBool('isPvaVisionTypeEnabled') ?? false;
+      _isPinvaEnabled = prefs.getBool('isPinvaVisionTypeEnabled') ?? true;
+      _isNearCvaEnabled = prefs.getBool('isNearCvaVisionTypeEnabled') ?? false;
+    });
   }
 
   /// Loads latest patient ID from history and sets the text controller.
@@ -115,7 +162,7 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
     if (patientId.isEmpty) {
       if (!mounted) return;
       setState(() {
-        _operationDone = List<bool>.filled(_visionOptions.length, false);
+        _operationDone = List<bool>.filled(_allVisionOptions.length, false);
       });
       logger.d("Empty patientId in fetchOperationDone, setting all false");
       return;
@@ -125,20 +172,20 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
 
     // Prepare local list: one bool per vision option
     final List<bool> operationDone = List<bool>.filled(
-      _visionOptions.length,
+      _allVisionOptions.length,
       false,
     );
 
-    const int VISION_COL_INDEX = 2; // <-- adjust to your actual column index
+    const int visionColIndex = 2; // <-- adjust to your actual column index
 
-    for (int i = 0; i < _visionOptions.length; i++) {
-      final option = _visionOptions[i];
+    for (int i = 0; i < _allVisionOptions.length; i++) {
+      final option = _allVisionOptions[i];
 
       // Check if ANY row has this vision option
       final exists = rowData.any((row) {
         logger.d("Checking row for option '$option': $row");
-        if (row.length <= VISION_COL_INDEX) return false;
-        final visionValue = row[VISION_COL_INDEX];
+        if (row.length <= visionColIndex) return false;
+        final visionValue = row[visionColIndex];
         return visionValue.toLowerCase() == option.toLowerCase();
       });
 
@@ -173,14 +220,127 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
     );
   }
 
+  bool _isDone(String visionType) {
+    final index = _allVisionOptions.indexOf(visionType);
+    return index >= 0 && _operationDone.length > index && _operationDone[index];
+  }
+
+  void _selectVisionType(String visionType) {
+    setState(() {
+      _selectedVisionType = visionType;
+    });
+  }
+
+  List<_DistanceVisionRow> get _distanceVisionRows {
+    return [
+      const _DistanceVisionRow(
+        title: 'UCVA',
+        rightValue: _rightUcva,
+        leftValue: _leftUcva,
+      ),
+      if (_isCvaEnabled)
+        const _DistanceVisionRow(
+          title: 'CVA',
+          rightValue: _rightCva,
+          leftValue: _leftCva,
+        ),
+      if (_isPvaEnabled)
+        const _DistanceVisionRow(
+          title: 'PVA',
+          rightValue: _rightPva,
+          leftValue: _leftPva,
+        ),
+      if (_isPinvaEnabled)
+        const _DistanceVisionRow(
+          title: 'PinVA',
+          rightValue: _rightPinva,
+          leftValue: _leftPinva,
+        ),
+    ];
+  }
+
+  Widget _buildEyeChoiceButton({
+    required String label,
+    required String visionType,
+  }) {
+    final selected = _selectedVisionType == visionType;
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: () => _selectVisionType(visionType),
+        icon: _isDone(visionType)
+            ? const Icon(Icons.check_circle, color: Colors.green)
+            : Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              ),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? Colors.indigo.shade50 : Colors.white,
+          foregroundColor: selected ? Colors.indigo : Colors.black87,
+          side: BorderSide(
+            color: selected ? Colors.indigo : Colors.grey.shade400,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistanceVisionRow(_DistanceVisionRow row) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              row.title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+          _buildEyeChoiceButton(label: 'Right', visionType: row.rightValue),
+          const SizedBox(width: 8),
+          _buildEyeChoiceButton(label: 'Left', visionType: row.leftValue),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearVisionOption(String visionType) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: RadioListTile<String>(
+        title: Text(visionType),
+        value: visionType,
+        // ignore: deprecated_member_use
+        groupValue: _selectedVisionType,
+        // ignore: deprecated_member_use
+        onChanged: (val) {
+          if (val != null) _selectVisionType(val);
+        },
+        tileColor: Colors.white,
+        secondary: _isDone(visionType)
+            ? const Icon(Icons.check_circle, color: Colors.green)
+            : null,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Patient Information'),
+        title: const Text(
+          'Patient Information',
+          style: TextStyle(color: Colors.white),
+        ),
         centerTitle: true,
         backgroundColor: Colors.indigo,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           ElevatedButton(
             onPressed: () {
@@ -227,38 +387,21 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Select Vision Type:',
+                'Distance VA',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ..._visionOptions.asMap().entries.map((entry) {
-                final index = entry.key;
-                final option = entry.value;
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: RadioListTile<String>(
-                    title: Text(option),
-                    value: option,
-                    groupValue: _selectedVisionType,
-                    onChanged: (val) {
-                      setState(() {
-                        _selectedVisionType = val;
-                      });
-                    },
-                    // shape is not a property of RadioListTile; Card already has shape
-                    tileColor: Colors.white,
-                    secondary:
-                        _operationDone.length > index && _operationDone[index]
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                );
-              }).toList(),
+              for (final row in _distanceVisionRows)
+                _buildDistanceVisionRow(row),
+              const SizedBox(height: 16),
+              const Text(
+                'Near VA (binocular)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              _buildNearVisionOption(_presentingNearVa),
+              if (_isNearCvaEnabled) _buildNearVisionOption(_nearCva),
+              _buildNearVisionOption(_unaidedNearVa),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,

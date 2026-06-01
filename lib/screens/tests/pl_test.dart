@@ -1,16 +1,19 @@
-
 import 'package:flutter/material.dart';
 import 'package:torch_light/torch_light.dart';
 
 import '../../Logger/logger.dart';
 
 class PlTest extends StatefulWidget {
-  String patientInfo;
-  String visionType;
+  final String patientInfo;
+  final String visionType;
   final void Function(bool canSeeLight) onComplete;
 
-  PlTest({super.key, required this.patientInfo,
-    required this.visionType,required this.onComplete});
+  const PlTest({
+    super.key,
+    required this.patientInfo,
+    required this.visionType,
+    required this.onComplete,
+  });
 
   @override
   State<PlTest> createState() => _PlTestState();
