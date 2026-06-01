@@ -67,6 +67,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ambientLuxByLevel: widget.ambientLuxByLevel,
       screenBrightnessByLevel: widget.screenBrightnessByLevel,
     );
+
   }
 
   String _getExplanation(String result) {
@@ -166,7 +167,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   arguments: {'patientInfo': widget.patientInfo},
                 ),
                 icon: const Icon(Icons.arrow_forward),
-                label: const Text("Restart Test"),
+                label: const Text("Test Vision"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white, //

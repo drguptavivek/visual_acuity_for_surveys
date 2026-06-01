@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:v_a_rpc/managers/test_history.dart';
 import 'package:v_a_rpc/utils/uid_helpers.dart';
+import 'package:v_a_rpc/utils/vision_type_instructions.dart';
 
 import '../../Logger/logger.dart';
 
@@ -201,7 +202,7 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
     logger.d("fetched _operationDone : $_operationDone");
   }
 
-  void _startTest() {
+  Future<void> _startTest() async {
     final info = _infoController.text.trim();
     final selected = _selectedVisionType;
 
@@ -214,11 +215,48 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
       return;
     }
 
+    final proceed = await _showVisionTypeInstruction(selected);
+    if (!mounted || !proceed) return;
+
     Navigator.pushReplacementNamed(
       context,
       '/test',
       arguments: {'patientInfo': info, 'visionType': selected},
     );
+  }
+
+  Future<bool> _showVisionTypeInstruction(String visionType) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Before starting'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              visionType,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(visionTypeInstruction(visionType)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   bool _isDone(String visionType) {
