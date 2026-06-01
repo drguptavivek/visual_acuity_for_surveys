@@ -24,10 +24,19 @@ enum DistanceFlowMode {
 }
 
 const String nearScreenBrightnessPercentKey = 'nearScreenBrightnessPercent';
+const String distanceScreenBrightnessPercentKey =
+    'distanceScreenBrightnessPercent';
 const int defaultNearScreenBrightnessPercent = 50;
 const int minNearScreenBrightnessPercent = 30;
 const int maxNearScreenBrightnessPercent = 70;
 const int nearScreenBrightnessStepPercent = 2;
+const int defaultDistanceScreenBrightnessPercent = 65;
+const int minDistanceScreenBrightnessPercent = 50;
+const int maxDistanceScreenBrightnessPercent = 80;
+const int distanceScreenBrightnessStepPercent = 5;
+const double defaultDistanceScreenBrightness =
+    defaultDistanceScreenBrightnessPercent / 100;
+const Duration ambientLightCheckInterval = Duration(seconds: 15);
 
 class DistanceFlowStep {
   final int? nextLevel;
@@ -146,7 +155,9 @@ int startNearLevel({required Set<int> disabledLevels}) {
 }
 
 double defaultScreenBrightnessForVisionType(String visionType) {
-  return isNearVisionType(visionType) ? 0.5 : 0.8;
+  return isNearVisionType(visionType)
+      ? defaultNearScreenBrightnessPercent / 100
+      : defaultDistanceScreenBrightness;
 }
 
 int normalizeNearScreenBrightnessPercent(int value) {
@@ -156,8 +167,19 @@ int normalizeNearScreenBrightnessPercent(int value) {
   );
 }
 
+int normalizeDistanceScreenBrightnessPercent(int value) {
+  return value.clamp(
+    minDistanceScreenBrightnessPercent,
+    maxDistanceScreenBrightnessPercent,
+  );
+}
+
 double brightnessPercentToFraction(int percent) {
   return normalizeNearScreenBrightnessPercent(percent) / 100;
+}
+
+double distanceBrightnessPercentToFraction(int percent) {
+  return normalizeDistanceScreenBrightnessPercent(percent) / 100;
 }
 
 Future<int> calibratedNearScreenBrightnessPercent() async {
@@ -168,8 +190,24 @@ Future<int> calibratedNearScreenBrightnessPercent() async {
   );
 }
 
+Future<int> calibratedDistanceScreenBrightnessPercent() async {
+  final prefs = await SharedPreferences.getInstance();
+  return normalizeDistanceScreenBrightnessPercent(
+    prefs.getInt(distanceScreenBrightnessPercentKey) ??
+        defaultDistanceScreenBrightnessPercent,
+  );
+}
+
+Future<double?> savedPxPerCm() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getDouble('pxPerCm');
+}
+
 Future<double> screenBrightnessForVisionType(String visionType) async {
-  if (!isNearVisionType(visionType)) return 0.8;
+  if (!isNearVisionType(visionType)) {
+    final distancePercent = await calibratedDistanceScreenBrightnessPercent();
+    return distanceBrightnessPercentToFraction(distancePercent);
+  }
   final nearPercent = await calibratedNearScreenBrightnessPercent();
   return brightnessPercentToFraction(nearPercent);
 }
@@ -220,6 +258,14 @@ Future<void> setApplicationBrightness(double brightness) async {
     await ScreenBrightness().setApplicationScreenBrightness(brightness);
   } catch (e) {
     logger.d('Failed to set brightness: $e');
+  }
+}
+
+Future<void> resetApplicationBrightness() async {
+  try {
+    await ScreenBrightness().resetApplicationScreenBrightness();
+  } catch (e) {
+    logger.d('Failed to reset brightness: $e');
   }
 }
 

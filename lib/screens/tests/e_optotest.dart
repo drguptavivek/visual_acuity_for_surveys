@@ -481,7 +481,7 @@ class _TestScreenState extends State<TestScreen> {
   }
 
   void _startAmbientLightTimer() {
-    _ambientLightTimer = Timer.periodic(const Duration(seconds: 5), (
+    _ambientLightTimer = Timer.periodic(ambientLightCheckInterval, (
       timer,
     ) async {
       final ok = await checkAmbientLight(_maxLuxValue, false, context);

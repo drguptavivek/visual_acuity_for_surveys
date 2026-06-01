@@ -13,9 +13,20 @@ void main() {
         0.5,
       );
       expect(defaultScreenBrightnessForVisionType('Unaided Near VA'), 0.5);
-      expect(defaultScreenBrightnessForVisionType('Right eye - UVA'), 0.8);
+      expect(defaultScreenBrightnessForVisionType('Right eye - UVA'), 0.65);
     },
   );
+
+  test('ambient light checks avoid aggressive polling during field use', () {
+    expect(ambientLightCheckInterval, const Duration(seconds: 15));
+  });
+
+  test('distance vision brightness has its own calibration policy', () {
+    expect(defaultDistanceScreenBrightnessPercent, 65);
+    expect(normalizeDistanceScreenBrightnessPercent(45), 50);
+    expect(normalizeDistanceScreenBrightnessPercent(85), 80);
+    expect(normalizeDistanceScreenBrightnessPercent(70), 70);
+  });
 
   test('presenting and unaided near VA use the near test track', () {
     expect(isNearVisionType('Presenting Near VA'), isTrue);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:v_a_rpc/managers/test_history.dart';
+import 'package:v_a_rpc/utils/uid_helpers.dart';
 
 import '../../Logger/logger.dart';
 
@@ -231,6 +232,28 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
     });
   }
 
+  Future<void> _scanUniqueId() async {
+    final scannedResult = await Navigator.pushNamed(
+      context,
+      '/qrScanner',
+    );
+    final scannedValue = scannedResult as String?;
+    if (scannedValue == null || scannedValue.trim().isEmpty) return;
+
+    final updatedInfo = patientInfoWithUid(
+      _infoController.text,
+      scannedValue,
+    );
+    if (!mounted) return;
+    setState(() {
+      _infoController.text = updatedInfo;
+      _infoController.selection = TextSelection.collapsed(
+        offset: updatedInfo.length,
+      );
+    });
+    await fetchOperationDone(updatedInfo);
+  }
+
   List<_DistanceVisionRow> get _distanceVisionRows {
     return [
       const _DistanceVisionRow(
@@ -380,6 +403,11 @@ class _PatientInputScreenState extends State<PatientInputScreen> {
                 maxLines: 1,
                 decoration: InputDecoration(
                   hintText: 'Enter name, age, etc.',
+                  suffixIcon: IconButton(
+                    onPressed: _scanUniqueId,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: 'Scan Unique ID',
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

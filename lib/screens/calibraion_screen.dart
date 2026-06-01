@@ -204,6 +204,19 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                     onPressed: () {
                       Navigator.pushNamed(
                         context,
+                        '/distanceBrightnessInstructions',
+                      );
+                    },
+                    icon: const Icon(Icons.wb_sunny_outlined),
+                    label: const Text('Distance Brightness Calibration'),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
                         '/nearBrightnessCalibration',
                       );
                     },

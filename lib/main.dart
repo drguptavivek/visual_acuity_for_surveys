@@ -6,6 +6,7 @@ import 'package:v_a_rpc/screens/calibraion_screen.dart';
 import 'package:v_a_rpc/screens/history_screen.dart';
 import 'package:v_a_rpc/screens/instructions/distance_screen.dart';
 import 'package:v_a_rpc/screens/near_brightness_calibration_screen.dart';
+import 'package:v_a_rpc/screens/qr_scanner_screen.dart';
 import 'package:v_a_rpc/screens/result.dart';
 import 'package:v_a_rpc/screens/splash_screen.dart';
 import 'package:v_a_rpc/screens/tests/e_optotest.dart';
@@ -41,8 +42,13 @@ class VisualAcuityApp extends StatelessWidget {
 
       routes: {
         '/calibrate': (context) => CalibrationScreen(),
+        '/distanceBrightnessInstructions': (context) =>
+            const DistanceBrightnessInstructionScreen(),
+        '/distanceBrightnessCalibration': (context) =>
+            const DistanceBrightnessCalibrationScreen(),
         '/nearBrightnessCalibration': (context) =>
             const NearBrightnessCalibrationScreen(),
+        '/qrScanner': (context) => const QrScannerScreen(),
         '/test': (context) => TestScreenWrapper(),
         '/testHome': (context) => PatientInputScreenWrapper(),
         '/summary': (context) => const SummaryScreenWrapper(),
